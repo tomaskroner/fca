@@ -159,6 +159,7 @@ def filter_od_matrix(df_od, threshold):
     Returns:
         pd.DataFrame: Filtered DataFrame containing only rows with Total_Time <= threshold
     """
+    
     print(f"Filtering OD matrix with threshold {threshold} minutes...")
     filtered_df = df_od[df_od[OD_TotalTimeField] <= threshold].copy()
     print(f"Remaining OD pairs after filtering: {len(filtered_df)}")
@@ -722,10 +723,6 @@ df_od = filter_od_matrix(df_od, d0)
 df_pop = load_population_data()
 df_dest = load_facility_capacities()
 
-# Compute Weights
-# df_od['Wkj_Gauss'] = df_od[OD_TotalTimeField].apply(lambda x: gauss_weight(x, d0, decay_f))
-# df_od['Wkj_Linear'] = df_od[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
-
 # Compute Huff Probability and Gij
 df_huff = compute_huff_probability(df_od, df_dest)
 df_od = compute_selection_weights(df_od)
@@ -744,7 +741,7 @@ df_spai_m2sfca = compute_accessibility_m2sfca(df_od, df_rj_m2sfca)
 df_spai_3sfca = compute_accessibility_3sfca(df_od, df_rj_3sfca)
 df_spai_e3sfca = compute_accessibility_e3sfca(df_huff, df_od, df_rj_e3sfca)
 
-# Complete output with municipalities with zero SPAI
+# Complete output (fill with zeros) for municipalities with zero SPAI
 df_spai_2sfca = complete_spai_output(df_spai_2sfca, df_pop, spai_column="SPAI_2sfca")
 df_spai_e2sfca = complete_spai_output(df_spai_e2sfca, df_pop, spai_column="SPAI_e2sfca")
 df_spai_m2sfca = complete_spai_output(df_spai_m2sfca, df_pop, spai_column="SPAI_m2sfca")
