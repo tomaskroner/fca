@@ -88,15 +88,14 @@ def load_od_matrix():
     Loads the Origin-Destination (OD) cost matrix from the specified ArcGIS Pro table
 
     This function reads the OD matrix using an ArcPy SearchCursor and creates a DataFrame 
-    containing travel times between origin and destination pairs. It also extracts a unique 
-    identifier (`DestinationID`) from the destination name field
+    containing travel times between origin and destination pairs.
 
     Returns:
         pd.DataFrame: A DataFrame with columns:
             - OriginID (origin location ID)
             - Name (destination name, typically contains a unique ID or label)
             - Total_Time (travel time or cost between origin and destination)
-            - DestinationID (parsed unique ID from the destination name string)
+            - DestinationID (unique identifier for the destination, from the OD Matrix)
     """
         
     print("Loading OD matrix...")
@@ -216,6 +215,7 @@ def compute_selection_weights(df_od):
     return df_od
 
 def compute_huff_probability(df_od, df_dest):
+    # !note: this function should be rewritten using dataframes instead of dictionaries (performance? and code consistency!)
 
     """
     Computes Huff probabilities (Huff_ij) for each origin-destination pair
@@ -252,28 +252,45 @@ def compute_huff_probability(df_od, df_dest):
 
     print("Computing Huff probabilities...")
 
-    # Extract relevant data
-    distances = {(row[OD_SourceIDField], row['DestinationID']): row[OD_TotalTimeField] for _, row in df_od.iterrows()}
+# Create a dictionary of {(OriginID, DestinationID): travel_time} from the OD matrix
+    distances = {
+        (row[OD_SourceIDField], row['DestinationID']): row[OD_TotalTimeField]
+        for _, row in df_od.iterrows()
+    }
+
+    # Convert the facility capacities into a dictionary {DestinationID: capacity}
     supply_capacities = df_dest[supplyField].to_dict()
 
-    # Compute Huff probabilities
+    # Prepare an empty dictionary to hold the computed Huff probabilities
     huff_scores = {}
+
+    # Get a list of unique OriginIDs from the OD matrix
     origins = set(i for i, j in distances.keys())
 
+    # Loop through each origin i
     for i in origins:
+        # Calculate the denominator for Huff_ij: sum of (S_j * f(d_ij)) for all reachable destinations j
         denominator = sum(
             supply_capacities.get(j, 0) * gauss_weight(distances[i, j], d0, decay_f)
             for j in supply_capacities.keys()
-            if (i, j) in distances and distances[i, j] <= d0
+            if (i, j) in distances and distances[i, j] <= d0  # only include reachable destinations
         )
 
+        # Loop through destinations j for the same origin i
         for j in supply_capacities.keys():
             if (i, j) in distances and distances[i, j] <= d0:
+                # Calculate the numerator: S_j * f(d_ij)
                 numerator = supply_capacities[j] * gauss_weight(distances[i, j], d0, decay_f)
+
+                # Final Huff_ij = numerator / denominator, if denominator is not zero
                 huff_scores[(i, j)] = numerator / denominator if denominator > 0 else 0
 
-    # Convert to DataFrame
-    huff_df = pd.DataFrame([(i, j, prob) for (i, j), prob in huff_scores.items()], columns=[OD_SourceIDField, 'DestinationID', 'Huff_ij'])
+    # Convert the dictionary into a DataFrame with three columns
+    huff_df = pd.DataFrame(
+        [(i, j, prob) for (i, j), prob in huff_scores.items()],
+        columns=[OD_SourceIDField, 'DestinationID', 'Huff_ij']
+    )
+
     return huff_df
 
 def compute_rj_2sfca(df_od, df_pop, df_dest):
