@@ -1,29 +1,30 @@
 # The following script computes various FCA methods: 2SFCA, E2SFCA, M2SFCA, 3SFCA, E3SFCA; and writes the results to a CSV file
+# Compute FCA methods and export results to CSV
+
 # Import libraries
 import arcpy
 import pandas as pd
 import numpy as np
 
 # Paths to input files (Absolute paths)
-ODmatrix = r"C:\Users\sholl\Documents\ArcGIS\Packages\E2SFCA_skore_c76f9b\commondata\e2sfca_skore.gdb\ODCostMatrixSolver17gr90w\ODLines1lbcnyk"
-origins_layer = r"C:\Users\sholl\Desktop\UP\BC_3\BAK1_BAK2_HOTOVO\Zdrav_zarizeni_body.gdb\Obce_def_singleV2"
-destination_layer = r"C:\Users\sholl\Desktop\UP\BC_3\BAK1_BAK2_HOTOVO\Zdrav_zarizeni_body.gdb\NemocniceV3"
-output_csv = r"C:\Users\sholl\Desktop\UP\MGR_2\PRODA\fca_results.csv"
-# ODmatrix = r"C:\Users\sholl\Documents\ArcGIS\Packages\E2SFCA_skore_c76f9b\commondata\e2sfca_skore.gdb\ODCostMatrixSolverotluf8\ODLines114ri4w"
-# destination_layer = r"C:\Users\sholl\Desktop\UP\BC_3\BAK1_BAK2_HOTOVO\Zdrav_zarizeni_body.gdb\Gynekologie"
+ODmatrix = r"C:\path\to\ODCost.gdb\ODCostMatrixSolver123456\ODLines123456"
+origins_layer = r"C:\path\to\origins_layer"
+destination_layer = r"C:\path\to\destination_layer"
+output_csv = r"C:\path\to\output\table.csv"
 
 # Define field names (Global Variables)
-OD_SourceIDField = "OriginID"
-OD_DestinationNameField = "Name"
-OD_TotalTimeField = "Total_Time"
-SourceIDField = "kod"
-JoinIDField = "OriginID_Obec"
-PopField = "Poc_obyv_S"
-destinationIdField = "OBJECTID"
-supplyField = "PocetLuzek"
+OD_SourceIDField = "OriginID"                   # don't change
+OD_DestinationNameField = "Name"                # don't change, must be something like Location 1 - Destination 2
+OD_TotalTimeField = "Total_time"                # don't change
+SourceIDField = "pointid"                       # unique ID for each origin (e.g., municipality code, or generated ID for a point in grid), don't change
+JoinIDField = "OriginID_Point"                  # new field in origins layer to join with OD matrix, equals to OBJECTID!
+PopField = "grid_code"                          # population field in origins layer
+destinationIdField = "OBJECTID"                 # don't change
+supplyField = "capacity"                        # don't change unless neccessary, needs to be created manually in the destination layer
+# DIDField = "DID"                                
 
 # Set Parameters (Global Variables)
-d0 = 35     # (in minutes) 
+d0 = 30     # (in minutes) 
 passband_ratio = 0.25
 d_passband = d0 * passband_ratio
 power_f = 10
@@ -99,9 +100,15 @@ def load_od_matrix():
     """
         
     print("Loading OD matrix...")
+
     df_od = [row for row in arcpy.da.SearchCursor(ODmatrix, [OD_SourceIDField, OD_DestinationNameField, OD_TotalTimeField])]
     df_od = pd.DataFrame(df_od, columns=[OD_SourceIDField, OD_DestinationNameField, OD_TotalTimeField])
     df_od['DestinationID'] = df_od[OD_DestinationNameField].astype(str).str.split().str[-1]
+
+    # if it crashes use this instead, create "DID" attribute manually first
+    # df_od = [row for row in arcpy.da.SearchCursor(ODmatrix, [OD_SourceIDField, DIDField, OD_TotalTimeField])]
+    # df_od = pd.DataFrame(df_od, columns=[OD_SourceIDField, DIDField, OD_TotalTimeField])
+    # df_od['DestinationID'] = df_od[DIDField]
     return df_od
 
 def load_population_data():
@@ -115,9 +122,9 @@ def load_population_data():
 
     Returns:
         pd.DataFrame: A DataFrame with columns:
-            - kod (unique identifier for each origin, e.g., municipality code)
-            - Poc_obyv_S (population count at each origin location)
-            - OriginID_Obec (join field used to match origins to OD matrix)
+            - pointid (unique identifier for each origin, e.g., municipality code)
+            - grid_code (population count at each origin location)
+            - OriginID_Point (join field used to match origins to OD matrix)
     """
 
     print("Loading population data...")
@@ -136,7 +143,7 @@ def load_facility_capacities():
     Returns:
         pd.DataFrame: A DataFrame indexed by the facility ID as a string ('id_str') and containing:
             - OBJECTID (unique identifier of the facility)
-            - kapacita (supply capacity of the facility)
+            - capacity (supply capacity of the facility)
     """
         
     print("Loading facility capacities...")
@@ -171,8 +178,8 @@ def complete_spai_output(df_spai, df_pop, spai_column):
     even if their accessibility score is zero (i.e., no facilities within threshold).
     
     Args:
-        df_spai (pd.DataFrame): Calculated SPAI values. Must include 'kod' and [spai_column].
-        df_pop (pd.DataFrame): Population DataFrame. Must include 'kod'.
+        df_spai (pd.DataFrame): Calculated SPAI values. Must include 'pointid' and [spai_column].
+        df_pop (pd.DataFrame): Population DataFrame. Must include 'pointid'.
         spai_column (str): The name of the column containing SPAI scores.
         
     Returns:
@@ -241,7 +248,7 @@ def compute_huff_probability(df_od, df_dest):
             - Total_Time (travel time between origin and destination)
         df_dest (pd.DataFrame): DataFrame with facility capacities containing:
             - OBJECTID (facility identifier)
-            - kapacita (supply capacity of each facility)
+            - capacity (supply capacity of each facility)
 
     Returns:
         pd.DataFrame: DataFrame with columns:
@@ -313,9 +320,9 @@ def compute_rj_2sfca(df_od, df_pop, df_dest):
         df_od (pd.DataFrame): Origin-Destination matrix.
             Required columns: ['OriginID', 'DestinationID', 'Total_Time']
         df_pop (pd.DataFrame): Population data.
-            Required columns: ['kod', 'Poc_obyv_S', 'OriginID_Obec']
+            Required columns: ['pointid', 'grid_code', 'OriginID_Point']
         df_dest (pd.DataFrame): Facility supply data, indexed by DestinationID.
-            Required columns: ['kapacita']
+            Required columns: ['capacity']
 
     Returns:
         pd.DataFrame: DataFrame with:
@@ -363,9 +370,9 @@ def compute_rj_e2sfca(df_od, df_pop, df_dest):
         df_od (pd.DataFrame): Origin-Destination matrix.
             Required columns: ['OriginID', 'DestinationID', 'Total_Time']
         df_pop (pd.DataFrame): Population data.
-            Required columns: ['kod', 'Poc_obyv_S', 'OriginID_Obec']
+            Required columns: ['pointid', 'grid_code', 'OriginID_Point']
         df_dest (pd.DataFrame): Facility supply data, indexed by DestinationID.
-            Required columns: ['kapacita']
+            Required columns: ['capacity']
 
     Returns:
         pd.DataFrame: DataFrame with:
@@ -376,7 +383,7 @@ def compute_rj_e2sfca(df_od, df_pop, df_dest):
     print("Computing Rj for E2SFCA...")
 
     # Apply distance decay function
-    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(lambda x: gauss_weight(x, d0, decay_f))
 
     # Merge with population data to get Pi
     df_merged = df_od.merge(df_pop, left_on=OD_SourceIDField, right_on=JoinIDField)
@@ -392,8 +399,8 @@ def compute_rj_e2sfca(df_od, df_pop, df_dest):
     df_rj_e2sfca["Rj"] = df_rj_e2sfca[supplyField] / df_rj_e2sfca["Denom"]
     return df_rj_e2sfca[["DestinationID", "Rj"]]
 
-def compute_rj_m2sfca(df_od, df_pop, df_dest):
 
+def compute_rj_m2sfca(df_od, df_pop, df_dest):
     """
     Computes Rj values for the Modified 2-Step Floating Catchment Area (M2SFCA) method using:
 
@@ -424,24 +431,34 @@ def compute_rj_m2sfca(df_od, df_pop, df_dest):
 
     print("Computing Rj for M2SFCA...")
 
-    # Apply distance decay function
-    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    # f(dij)
+    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(
+        lambda x: gauss_weight(x, d0, decay_f)
+    )
 
-    # Merge with population data to get Pi
-    df_merged = df_od.merge(df_pop, left_on=OD_SourceIDField, right_on=JoinIDField)
+    # Pi
+    pop_lookup = df_pop.set_index(JoinIDField)[PopField]
+    df_od["Pi"] = df_od[OD_SourceIDField].map(pop_lookup)
 
-    # Compute denominator: SUM( Pi * f(d_ij) )
-    df_merged["Pi_f_dij"] = df_merged[PopField] * df_merged["f_dij"]
-    df_denom = df_merged.groupby("DestinationID")["Pi_f_dij"].sum().reset_index(name="Denom")
+    # Denominator: SUM_i (Pi * f(dij)) per j
+    df_od["Pi_f_dij"] = df_od["Pi"] * df_od["f_dij"]
+    denom = (
+        df_od
+        .groupby("DestinationID")["Pi_f_dij"]
+        .sum()
+    )
 
-    # Merge with facility capacities S_j
-    df_rj_m2sfca = df_denom.merge(df_dest, left_on="DestinationID", right_index=True, how="left")
+    # Sj
+    supply_lookup = df_dest[supplyField]
 
-    # Compute Rj = ( S_j * f(d_ij) ) / SUM( Pi * f(d_ij) )
-    df_od = df_od.merge(df_rj_m2sfca[["DestinationID", supplyField, "Denom"]], on="DestinationID", how="left")
-    df_od["Numerator"] = df_od[supplyField] * df_od["f_dij"]
-    df_rj_m2sfca["Rij"] = (df_od["Numerator"]) / df_rj_m2sfca["Denom"]
-    return df_rj_m2sfca[["DestinationID", "Rij"]]
+    df_od["Denom"] = df_od["DestinationID"].map(denom)
+    df_od["Sj"] = df_od["DestinationID"].map(supply_lookup)
+
+    # Rij
+    df_od["Rij"] = (df_od["Sj"] * df_od["f_dij"]) / df_od["Denom"]
+    df_od["Rij"] = df_od["Rij"].replace([np.inf, -np.inf], 0).fillna(0)
+
+    return df_od[[OD_SourceIDField, "DestinationID", "Rij"]]
 
 def compute_rj_3sfca(df_od, df_pop, df_dest):
     
@@ -463,10 +480,10 @@ def compute_rj_3sfca(df_od, df_pop, df_dest):
             - 'Total_Time'
             - 'Gij' (selection weight)
         df_pop (pd.DataFrame): Population data with:
-            - 'OriginID_Obec'
-            - 'Poc_obyv_S'
+            - 'OriginID_Point'
+            - 'grid_code'
         df_dest (pd.DataFrame): Facility capacities, indexed by destination ID ('id_str'), with:
-            - 'kapacita'
+            - 'capacity'
 
     Returns:
         pd.DataFrame: DataFrame with:
@@ -477,7 +494,7 @@ def compute_rj_3sfca(df_od, df_pop, df_dest):
     print("Computing Rj for 3SFCA...")
 
     # Apply distance decay function f(dij)
-    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(lambda x: gauss_weight(x, d0, decay_f))
 
     # Merge with population (to get Pi)
     df_merged = df_od.merge(df_pop, left_on=OD_SourceIDField, right_on=JoinIDField)
@@ -532,7 +549,7 @@ def compute_rj_e3sfca(df_huff, df_od, df_pop, df_dest):
     df_merged = df_merged.merge(df_pop, left_on=OD_SourceIDField, right_on=JoinIDField)
 
     # Apply distance decay function
-    df_merged['f_dij'] = df_merged[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    df_merged['f_dij'] = df_merged[OD_TotalTimeField].apply(lambda x: gauss_weight(x, d0, decay_f))
 
     # Compute denominator: SUM(Huff_ij * P_i * f(d_ij))
     df_merged['denominator'] = df_merged['Huff_ij'] * df_merged[PopField] * df_merged['f_dij']
@@ -599,7 +616,7 @@ def compute_accessibility_e2sfca(df_od, df_rj_e2sfca):
     print("Computing SPAI for E2SFCA...")
 
     # Apply distance decay function f(d_ij)
-    df_od['f_dij'] = df_od[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    df_od['f_dij'] = df_od[OD_TotalTimeField].apply(lambda x: gauss_weight(x, d0, decay_f))
 
     # Merge with Rj values
     df_merged = df_od.merge(df_rj_e2sfca, on="DestinationID", how="left")
@@ -615,7 +632,7 @@ def compute_accessibility_e2sfca(df_od, df_rj_e2sfca):
 
     return df_spai_e2sfca
 
-def compute_accessibility_m2sfca(df_od, df_rj_m2sfca):
+def compute_accessibility_m2sfca(df_od, df_rij):
 
     """
     Computes SPAi for M2SFCA:
@@ -630,24 +647,32 @@ def compute_accessibility_m2sfca(df_od, df_rj_m2sfca):
         - DataFrame with SPAi values.
     """
 
-    print("Computing SPAI for M2SFCA...")
+    # merge f(dij)
+    df = df_rij.merge(
+        df_od[[OD_SourceIDField, "DestinationID", "f_dij"]],
+        on=[OD_SourceIDField, "DestinationID"],
+        how="left"
+    )
 
-    # Apply distance decay function f(d_ij)
-    df_od['f_dij'] = df_od[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    # SPAi = SUM_j (Rij * f(dij))
+    df["SPAI_term"] = df["Rij"] * df["f_dij"]
 
-    # Merge with Rj values
-    df_merged = df_od.merge(df_rj_m2sfca, on="DestinationID", how="left")
+    df_spai = (
+        df
+        .groupby(OD_SourceIDField)["SPAI_term"]
+        .sum()
+        .reset_index(name="SPAI_m2sfca")
+    )
 
-    # Compute SPA_i = SUM( R_j * f(d_ij) ) for each origin
-    df_spai_m2sfca = df_merged.groupby(OD_SourceIDField).apply(lambda group: (group["Rij"] * group["f_dij"]).sum()).reset_index(name="SPAI_m2sfca")
+    # map to final ID
+    df_spai = df_spai.merge(
+        df_pop[[JoinIDField, SourceIDField]],
+        left_on=OD_SourceIDField,
+        right_on=JoinIDField,
+        how="left"
+    )
 
-    # Merge with population data to get SourceIDField
-    df_spai_m2sfca = df_spai_m2sfca.merge(df_pop[[JoinIDField, SourceIDField]], left_on=OD_SourceIDField, right_on=JoinIDField, how='left')
-
-    # Reorder columns for clarity
-    df_spai_m2sfca = df_spai_m2sfca[[SourceIDField, 'SPAI_m2sfca']]
-
-    return df_spai_m2sfca
+    return df_spai[[SourceIDField, "SPAI_m2sfca"]]
 
 def compute_accessibility_3sfca(df_od, df_rj_3sfca):
 
@@ -671,7 +696,7 @@ def compute_accessibility_3sfca(df_od, df_rj_3sfca):
     print("Computing SPAi for 3SFCA...")
 
     # Compute f(dij)
-    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    df_od["f_dij"] = df_od[OD_TotalTimeField].apply(lambda x: gauss_weight(x, d0, decay_f))
 
     # Merge Rj values onto OD table
     df_merged = df_od.merge(df_rj_3sfca, on="DestinationID", how="left")
@@ -712,7 +737,7 @@ def compute_accessibility_e3sfca(df_huff, df_od, df_rj_e3sfca):
     df_merged = df_huff.merge(df_od, on=[OD_SourceIDField, 'DestinationID'])
 
     # Apply distance decay function
-    df_merged['f_dij'] = df_merged[OD_TotalTimeField].apply(lambda x: linear_weight(x, d0))
+    df_merged['f_dij'] = df_merged[OD_TotalTimeField].apply(lambda x: gauss_weight(x, d0, decay_f))
 
     # Merge with Rj values
     df_merged = df_merged.merge(df_rj_e3sfca, on='DestinationID')
@@ -747,14 +772,14 @@ df_od = compute_selection_weights(df_od)
 # Compute Rj scores
 df_rj_2sfca = compute_rj_2sfca(df_od, df_pop, df_dest)
 df_rj_e2sfca = compute_rj_e2sfca(df_od, df_pop, df_dest)
-df_rj_m2sfca = compute_rj_m2sfca(df_od, df_pop, df_dest)
+df_rij = compute_rj_m2sfca(df_od, df_pop, df_dest)
 df_rj_3sfca = compute_rj_3sfca(df_od, df_pop, df_dest)
 df_rj_e3sfca = compute_rj_e3sfca(df_huff, df_od, df_pop, df_dest)
 
 # Compute accessibility scores
 df_spai_2sfca = compute_accessibility_2sfca(df_od, df_rj_2sfca)
 df_spai_e2sfca = compute_accessibility_e2sfca(df_od, df_rj_e2sfca)
-df_spai_m2sfca = compute_accessibility_m2sfca(df_od, df_rj_m2sfca)
+df_spai_m2sfca = compute_accessibility_m2sfca(df_rij, df_od)
 df_spai_3sfca = compute_accessibility_3sfca(df_od, df_rj_3sfca)
 df_spai_e3sfca = compute_accessibility_e3sfca(df_huff, df_od, df_rj_e3sfca)
 
