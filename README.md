@@ -1,7 +1,7 @@
 # FCA.py -- Floating Catchment Area
 
 User manual\
-March 21, 2026\
+March 27, 2026\
 Author: Tomáš Kröner
 
 ------------------------------------------------------------------------
@@ -67,19 +67,19 @@ To create an OD Cost Matrix, the following are required:
 
 The OD Cost Matrix table must contain these attributes:
 
-  Field           Description
-  --------------- --------------------------------------------
-  OriginID        ID of the origin location
-  DestinationID   ID of the destination location
-  Travel time     Travel time between origin and destination
+| Field | Description |
+|------|-------------|
+| OriginID | ID of the origin location |
+| DestinationID | ID of the destination location |
+| Travel time | Travel time between origin and destination |
 
 Example:
 
-  OriginID   Name                         Total_time
-  ---------- ---------------------------- ------------
-  1          Location 1 - Destination 5   12
-  1          Location 1 - Destination 8   18
-  2          Location 2 - Destination 5   6.5
+| OriginID | Name | Total_time |
+|----------|------|------------|
+| 1 | Location 1 - Destination 5 | 12 |
+| 1 | Location 1 - Destination 8 | 18 |
+| 2 | Location 2 - Destination 5 | 6.5 |
 
 ------------------------------------------------------------------------
 
@@ -89,19 +89,11 @@ A **point layer representing locations containing population**.
 
 Required attributes:
 
-  -----------------------------------------------------------------------
-  Variable          Default Field               Description
-  ----------------- --------------------------- -------------------------
-  `SourceIDField`   `pointid`                   Unique location ID (e.g.,
-                                                administrative unit code)
-
-  `PopField`        `grid_code`                 Population count
-
-  `JoinIDField`     `OriginID_Point`            Join ID linking to OD
-                                                matrix (must equal
-                                                `OBJECTID`, must be
-                                                created manually)
-  -----------------------------------------------------------------------
+| Variable | Default Field | Description |
+|----------|---------------|-------------|
+| `SourceIDField` | `pointid` | Unique location ID (e.g., administrative unit code) |
+| `PopField` | `grid_code` | Population count |
+| `JoinIDField` | `OriginID_Point` | Join ID linking to OD matrix (must equal `OBJECTID`, created manually) |
 
 ------------------------------------------------------------------------
 
@@ -111,10 +103,10 @@ Layer representing **service facilities** (e.g., hospitals).
 
 Required attributes:
 
-  Variable               Default Field   Description
-  ---------------------- --------------- -----------------------------
-  `destinationIdField`   `OBJECTID`      Facility ID (do not modify)
-  `supplyField`          `capacity`      Facility capacity
+| Variable | Default Field | Description |
+|----------|---------------|-------------|
+| `destinationIdField` | `OBJECTID` | Facility ID (do not modify) |
+| `supplyField` | `capacity` | Facility capacity |
 
 ------------------------------------------------------------------------
 
@@ -137,12 +129,12 @@ output_csv = r"C:\Users\JohnDoe\Desktop\Results.csv"
 
 Description:
 
-  Variable              Meaning
-  --------------------- -------------------------
-  `ODmatrix`            OD Cost Matrix table
-  `origins_layer`       Population layer
-  `destination_layer`   Facilities layer
-  `output_csv`          Path to output CSV file
+  | Variable | Meaning |
+  | -------- | ------- |
+  | `ODmatrix` | OD Cost Matrix table |
+  | `origins_layer` | Population layer |
+  | `destination_layer` | Facilities layer |
+  | `output_csv` | Path to output CSV file |
 
 ------------------------------------------------------------------------
 
@@ -155,10 +147,10 @@ d0 = 30
 decay_f = 15
 ```
 
-  Parameter   Description
-  ----------- -----------------------------------
-  `d0`        Maximum travel time (minutes)
-  `decay_f`   Gaussian decay function parameter
+  | Parameter | Description |
+  | --------- | ----------- |
+  | `d0` | Maximum travel time (minutes) |
+  | `decay_f` | Gaussian decay function parameter |
 
 Example:
 
@@ -229,12 +221,11 @@ The output is a **CSV file**.
 
 Example:
 
-  ------------------------------------------------------------------------------
-  pointid   SPAI_2sfca   SPAI_e2sfca   SPAI_m2sfca   SPAI_3sfca    SPAI_e3sfca
-  --------- ------------ ------------- ------------- ------------- -------------
-  101       0.34         0.29          0.31          0.27          0.25
+| pointid | SPAI_2sfca | SPAI_e2sfca | SPAI_m2sfca | SPAI_3sfca | SPAI_e3sfca |
+|--------|------------|-------------|-------------|------------|-------------|
+| 101 | 0.34 | 0.29 | 0.31 | 0.27 | 0.25 |
+| 102 | 0.21 | 0.19 | 0.20 | 0.18 | 0.17 |
 
-  102       0.21         0.19          0.20          0.18          0.17
   ------------------------------------------------------------------------------
 
 Each column corresponds to **one FCA method**.
